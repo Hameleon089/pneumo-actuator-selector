@@ -20,14 +20,15 @@ type (
 )
 
 const (
-	initPressure = 2.5
-	maxPressure  = 8.0
-	maxTorque    = 7521
+	initPressure    = 2.5
+	maxPressure     = 8.0
+	maxTorque       = 7521
+	maxSafetyFactor = 3.5
 )
 
 var (
 	result        ActResult
-	ok            bool
+	ok, broken    bool
 	safetyFactor  float64
 	sfStruct      safetyFactorSR
 	actuatorsList = [14]actuator{

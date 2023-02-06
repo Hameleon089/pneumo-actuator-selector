@@ -61,7 +61,7 @@ func checkParams(pressure, nomTorque, safetyFactor float64) bool {
 func DASelector(pressure, nomTorque, safetyFactor float64) (bool, ActResult) {
 	for _, act := range actuatorsList {
 		actuatorTorque := act.torque * pressure / initPressure
-		if nomTorque*safetyFactor <= actuatorTorque {
+		if safetyFactor < actuatorTorque/nomTorque || safetyFactor-actuatorTorque/nomTorque <= 0.01 {
 			return true, ActResult{
 				model:  act.model,
 				torque: actuatorTorque,
@@ -82,10 +82,10 @@ func SRSelector(pressure, nomTorque float64, safetyFactorSR safetyFactorSR) (boo
 			actTorque90 := act.torque*pressure/initPressure - spr.torque90
 			if minSpringPressure[springNum] <= pressure &&
 				maxSpringPressure[springNum] >= pressure &&
-				spr.torque90 >= torqueBTC &&
-				spr.torque0 >= torqueETC &&
-				actTorque0 >= torqueBTO &&
-				actTorque90 >= torqueETO {
+				(spr.torque90 > torqueBTC || safetyFactorSR.factorBTC-spr.torque90/nomTorque <= 0.01) &&
+				(spr.torque0 > torqueETC || safetyFactorSR.factorETC-spr.torque0/nomTorque <= 0.01) &&
+				(actTorque0 > torqueBTO || safetyFactorSR.factorBTO-actTorque0/nomTorque <= 0.01) &&
+				(actTorque90 > torqueETO || safetyFactorSR.factorETO-actTorque90/nomTorque <= 0.01) {
 				return true, ActResult{
 					model:     act.model,
 					springNum: springNum + 5,
@@ -100,31 +100,55 @@ func SRSelector(pressure, nomTorque float64, safetyFactorSR safetyFactorSR) (boo
 	return false, ActResult{}
 }
 
-func printResultDA(result ActResult, nomTorque float64) {
+func printResultDA(result ActResult, nomTorque float64) bool {
+	broken := false
+	daSafetyFactor := result.torque / nomTorque
 	fmt.Printf(
-		"\nМодель привода - %sDA\nКоэффициент запаса - %.2f\n",
+		"\nМодель привода - %sDA\nКрутящий момент привода - %.2f Н*м\nКоэффициент запаса - %.2f\n",
 		result.model,
-		result.torque/nomTorque,
+		result.torque,
+		daSafetyFactor,
 	)
+	if daSafetyFactor >= maxSafetyFactor {
+		broken = true
+	}
+	return broken
 }
 
-func printResultSR(result ActResult, nomTorque float64, sfStruct safetyFactorSR) {
+func printResultSR(result ActResult, nomTorque float64, sfStruct safetyFactorSR) bool {
+	broken := false
+	safetyFactorBTO := result.torqueBTO / nomTorque
+	safetyFactorETO := result.torqueETO / nomTorque
+	safetyFactorBTC := result.torqueBTC / nomTorque
+	safetyFactorETC := result.torqueETC / nomTorque
 	fmt.Printf(
-		"\nМодель привода - %sSR\nПружины номер - %d\nКоэффициенты запаса:\n",
+		"\nМодель привода - %sSR\nПружины номер - %d\nКрутящие моменты привода:\n",
 		result.model, result.springNum,
 	)
 	fmt.Printf(
+		" BTO - %.2f Н*м\n ETO - %.2f Н*м\n BTC - %.2f Н*м\n ETC - %.2f Н*м\n",
+		result.torqueBTO, result.torqueETO, result.torqueBTC, result.torqueETC,
+	)
+	fmt.Println("Коэффициенты запаса:")
+	fmt.Printf(
 		" BTO - %.2f (задан - %.2f)\n ETO - %.2f (задан - %.2f)\n BTC - %.2f (задан - %.2f)\n ETC - %.2f (задан - %.2f)\n",
-		result.torqueBTO/nomTorque,
+		safetyFactorBTO,
 		sfStruct.factorBTO,
-		result.torqueETO/nomTorque,
+		safetyFactorETO,
 		sfStruct.factorETO,
-		result.torqueBTC/nomTorque,
+		safetyFactorBTC,
 		sfStruct.factorBTC,
-		result.torqueETC/nomTorque,
+		safetyFactorETC,
 		sfStruct.factorETC,
 	)
 
+	if safetyFactorBTO >= maxSafetyFactor ||
+		safetyFactorETO >= maxSafetyFactor ||
+		safetyFactorBTC >= maxSafetyFactor ||
+		safetyFactorETC >= maxSafetyFactor {
+		broken = true
+	}
+	return broken
 }
 
 func mainMenu() {
@@ -167,9 +191,12 @@ func mainMenu() {
 		if ok {
 			switch {
 			case menu == 1:
-				printResultDA(result, nomTorque)
+				broken = printResultDA(result, nomTorque)
 			default:
-				printResultSR(result, nomTorque, sfStruct)
+				broken = printResultSR(result, nomTorque, sfStruct)
+			}
+			if broken {
+				fmt.Println("ВНИМАНИЕ! Очень большой коэффициент запаса - возможно механическое разрушение штока арматуры.")
 			}
 		}
 	}
