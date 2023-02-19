@@ -25,7 +25,7 @@ const (
 	maxPressure     = 8.0
 	maxTorque       = 7521
 	maxSafetyFactor = 3.5
-	stepToOptimal   = 2
+	stepToOptimal   = 1
 )
 
 var (
