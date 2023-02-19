@@ -4,21 +4,24 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
-	"golang.org/x/exp/slices"
 	"log"
 	"math"
 	"os"
 	"strconv"
 	"strings"
+
+	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/exp/slices"
 )
 
+// Check error
 func fatalErr(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
+// Read float param
 func readFloatParam() (float64, error) {
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
@@ -30,6 +33,7 @@ func readFloatParam() (float64, error) {
 	return 0, err
 }
 
+// Input parametr
 func inputParam(invitation string) float64 {
 	fmt.Print(invitation)
 	param, err := readFloatParam()
@@ -40,6 +44,7 @@ func inputParam(invitation string) float64 {
 	return param
 }
 
+// Read mode
 func readMode() (int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
@@ -51,6 +56,7 @@ func readMode() (int, error) {
 	return 0, err
 }
 
+// Input mode
 func inputMode() int {
 	invitation := "Введите число (1-5): "
 	fmt.Print(invitation)
@@ -62,6 +68,7 @@ func inputMode() int {
 	return mode
 }
 
+// Check input parametrs (pressure, torque, safety factor)
 func checkParams(pressure, nomTorque, safetyFactor float64) bool {
 	if pressure <= maxPressure && pressure >= initPressure && nomTorque*safetyFactor <= maxTorque {
 		return true
@@ -69,19 +76,7 @@ func checkParams(pressure, nomTorque, safetyFactor float64) bool {
 	return false
 }
 
-//func DASelector(pressure, nomTorque, safetyFactor float64) (bool, ActResult) {
-//	for _, act := range actuatorsList {
-//		actuatorTorque := act.torque * pressure / initPressure
-//		if safetyFactor < actuatorTorque/nomTorque || safetyFactor-actuatorTorque/nomTorque <= 0.01 {
-//			return true, ActResult{
-//				model:  act.model,
-//				torque: actuatorTorque,
-//			}
-//		}
-//	}
-//	return false, ActResult{}
-//}
-
+// Choose pressure for selector
 func choosePressure(pressureList []float64, curPressure float64) float64 {
 	if !slices.Contains(pressureList, curPressure) {
 		minI := 0
@@ -98,6 +93,7 @@ func choosePressure(pressureList []float64, curPressure float64) float64 {
 	return curPressure
 }
 
+// Select DA actuator
 func DASelector(curPressure, nomTorque, safetyFactor float64) (bool, ActResult) {
 	query := "SELECT DISTINCT pressure FROM da_air_torque"
 	db, err := sql.Open("sqlite3", "db.sqlite3")
@@ -135,6 +131,7 @@ func DASelector(curPressure, nomTorque, safetyFactor float64) (bool, ActResult) 
 	return false, ActResult{}
 }
 
+// Select SR actuator
 func SRSelector(curPressure, nomTorque float64, safetyFactorSR safetyFactorSR) (bool, []ActResult) {
 	query := "SELECT DISTINCT pressure FROM sr_air_torque"
 	db, err := sql.Open("sqlite3", "db.sqlite3")
@@ -168,9 +165,7 @@ func SRSelector(curPressure, nomTorque float64, safetyFactorSR safetyFactorSR) (
 	)
 
 	rows, err = db.Query(query)
-	if err != nil {
-		return false, []ActResult{}
-	}
+
 	var actList []ActResult
 
 	for rows.Next() {
@@ -192,38 +187,15 @@ func SRSelector(curPressure, nomTorque float64, safetyFactorSR safetyFactorSR) (
 			optimal:   optimal,
 		})
 	}
+
+	if err != nil || len(actList) == 0 {
+		return false, []ActResult{}
+	}
+
 	return true, actList
 }
 
-//func SRSelector(pressure, nomTorque float64, safetyFactorSR safetyFactorSR) (bool, ActResult) {
-//	torqueBTO := safetyFactorSR.factorBTO * nomTorque
-//	torqueETO := safetyFactorSR.factorETO * nomTorque
-//	torqueBTC := safetyFactorSR.factorBTC * nomTorque
-//	torqueETC := safetyFactorSR.factorETC * nomTorque
-//	for _, act := range actuatorsList {
-//		for springNum, spr := range act.springs {
-//			actTorque0 := act.torque*pressure/initPressure - spr.torque0
-//			actTorque90 := act.torque*pressure/initPressure - spr.torque90
-//			if minSpringPressure[springNum] <= pressure &&
-//				maxSpringPressure[springNum] >= pressure &&
-//				(spr.torque90 > torqueBTC || safetyFactorSR.factorBTC-spr.torque90/nomTorque <= 0.01) &&
-//				(spr.torque0 > torqueETC || safetyFactorSR.factorETC-spr.torque0/nomTorque <= 0.01) &&
-//				(actTorque0 > torqueBTO || safetyFactorSR.factorBTO-actTorque0/nomTorque <= 0.01) &&
-//				(actTorque90 > torqueETO || safetyFactorSR.factorETO-actTorque90/nomTorque <= 0.01) {
-//				return true, ActResult{
-//					model:     act.model,
-//					springNum: springNum + 5,
-//					torqueBTO: actTorque0,
-//					torqueETO: actTorque90,
-//					torqueBTC: spr.torque90,
-//					torqueETC: spr.torque0,
-//				}
-//			}
-//		}
-//	}
-//	return false, ActResult{}
-//}
-
+// Print result of select DA actuator
 func printResultDA(result ActResult, nomTorque float64) bool {
 	broken := false
 	daSafetyFactor := result.torque / nomTorque
@@ -239,6 +211,7 @@ func printResultDA(result ActResult, nomTorque float64) bool {
 	return broken
 }
 
+// Print result of select SR actuator
 func printResultSR(result ActResult, nomTorque float64, sfStruct safetyFactorSR) bool {
 	broken := false
 	safetyFactorBTO := result.torqueBTO / nomTorque
@@ -281,6 +254,7 @@ func printResultSR(result ActResult, nomTorque float64, sfStruct safetyFactorSR)
 	return broken
 }
 
+// Check selected actuator for optimality
 func checkOptimalResult(actList []ActResult, nomTorque float64, sfStruct safetyFactorSR) bool {
 	if !actList[0].optimal {
 		count := stepToOptimal
@@ -294,6 +268,7 @@ func checkOptimalResult(actList []ActResult, nomTorque float64, sfStruct safetyF
 	return false
 }
 
+// Main menu of program
 func mainMenu() {
 	fmt.Println("\nВыберите режим работы программы:")
 	fmt.Println(" 1 - подбор двухстороннего привода\n 2 - подбор НЗ привода с пружинами для затвора\n" +
