@@ -113,7 +113,7 @@ func DASelector(curPressure, nomTorque, safetyFactor float64) (bool, ActResult) 
 	chPressure := choosePressure(pressureList, curPressure)
 
 	query = fmt.Sprintf(
-		"SELECT torque, actuator_model FROM da_air_torque WHERE pressure = %f AND torque >= %f ORDER BY torque",
+		"SELECT torque, actuator_model FROM da_air_torque WHERE pressure = %[1]f AND (torque >= %[2]f OR torque - %[2]f < 0.2) ORDER BY torque",
 		chPressure, nomTorque*safetyFactor*chPressure/curPressure,
 	)
 
@@ -156,12 +156,16 @@ func SRSelector(curPressure, nomTorque float64, safetyFactorSR safetyFactorSR) (
 
 	query = fmt.Sprintf(
 		`SELECT sra.torque_0, sra.torque_90, number, optimal, s.torque_90, s.torque_0, s.actuator_model 
-		FROM sr_air_torque sra JOIN springs s on s.text_id = sra.spring_id 
-		WHERE pressure = %f AND s.torque_90 >= %f AND s.torque_0 >= %f 
-		  AND (s.torque_0 + sra.torque_0)  * %f - s.torque_0 >= %f 
-		  AND (s.torque_90 + sra.torque_90) * %f - s.torque_90 >= %f
-		ORDER BY id`,
-		chPressure, torqueBTC, torqueETC, curPressure/chPressure, torqueBTO, curPressure/chPressure, torqueETO,
+			FROM sr_air_torque sra JOIN springs s on s.text_id = sra.spring_id 
+			WHERE pressure = %[1]f 
+			AND (s.torque_90 > %[2]f OR %[2]f - s.torque_90 < %[7]f)
+			AND (s.torque_0 > %[3]f OR %[3]f - s.torque_0 < %[7]f) 
+			AND ((s.torque_0 + sra.torque_0)  * %[4]f - s.torque_0 > %[5]f 
+			OR  %[5]f - ((s.torque_0 + sra.torque_0)  * %[4]f - s.torque_0) < %[7]f)
+			AND ((s.torque_90 + sra.torque_90) * %[4]f - s.torque_90 > %[6]f
+			OR  %[6]f - ((s.torque_90 + sra.torque_90) * %[4]f - s.torque_90) < %[7]f)
+			ORDER BY id`,
+		chPressure, torqueBTC, torqueETC, curPressure/chPressure, torqueBTO, torqueETO, 0.2,
 	)
 
 	rows, err = db.Query(query)
