@@ -33,7 +33,7 @@ func readFloatParam() (float64, error) {
 	return 0, err
 }
 
-// Input parametr
+// Input parameter
 func inputParam(invitation string) float64 {
 	fmt.Print(invitation)
 	param, err := readFloatParam()
@@ -68,7 +68,7 @@ func inputMode() int {
 	return mode
 }
 
-// Check input parametrs (pressure, torque, safety factor)
+// Check input parameters (pressure, torque, safety factor)
 func checkParams(pressure, nomTorque, safetyFactor float64) bool {
 	if pressure <= maxPressure && pressure >= initPressure && nomTorque*safetyFactor <= maxTorque {
 		return true
@@ -328,7 +328,7 @@ func mainMenu() {
 	}
 
 	if !ok {
-		fmt.Println("\nДля заданных парметров не удалось ничего подобрать. Попробуйте другие параметры.")
+		fmt.Println("\nДля заданных параметров не удалось ничего подобрать. Попробуйте другие параметры.")
 	}
 
 	mainMenu()
